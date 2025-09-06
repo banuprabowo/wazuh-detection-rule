@@ -1,100 +1,54 @@
-<!--
-  Layered Detection for MITRE T1053.005: Scheduled Task Creation
-  This ruleset combines high-fidelity, context-aware rules with broader
-  detection patterns to provide comprehensive coverage while managing alert noise.
--->
-<group name="windows,sysmon,attack,persistence,execution,t1053.005,">
+<group name="windows, sysmon, attack, persistence, t1053.005">
+	<!-- Schtasks.exe detection on command-line -->
+	<rule id="100103" level="10">
+		<if_sid>60228</if_sid>
+		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)\/sc\s+once</regex>
+		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)\/tr\s+(cmd\.exe|powershell\.exe)</regex>
+		<description>Scheduled Task Creation: one-time execution and launching an interpreter ($(win.eventdata.CommandLine)): </description>
+		<mitre>
+			<id>T1053.005</id>
+		</mitre>
+		<group>persistence,scheduled_task,lateral_movement,</group>
+	</rule>
 
-  <!--
-    ================================================================================
-    Rule 1: High-Fidelity Detection - Task Created by Suspicious Parent (Level 12)
-    ================================================================================
-    This is the most specific and high-confidence rule. It triggers when a
-    scheduled task is created directly by a scripting engine or remote admin tool,
-    which is a strong indicator of malicious activity. This is based on the
-    pattern observed in your original log file.
-  -->
-  <rule id="100101" level="12">
-    <if_sid>92004</if_sid> <!-- Wazuh Sysmon: Process Creation -->
-    <field name="win.eventdata.image" type="pcre2">(?i)schtasks\.exe$</field>
-    <field name="win.eventdata.commandLine" type="pcre2">(?i)\/create</field>
-    <field name="win.eventdata.parentImage" type="pcre2">(?i)(powershell\.exe|wscript\.exe|cscript\.exe|wmiprvse\.exe|mshta\.exe)$</field>
-    <description>High-Confidence: A suspicious parent process (${win.eventdata.parentImage}) created a scheduled task.</description>
-    <mitre>
-      <id>T1053.005</id>
-    </mitre>
-  </rule>
+	<rule id="100104" level="10">
+		<if_sid>60228</if_sid>
+		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)(compmgnt\.msc|eventvmw\.msc|\.msc</regex>
+		<description>Scheduled Task Creation</description>
+		<group>persistence,scheduled_task</group>
+	</rule>
 
-  <!--
-    ================================================================================
-    Rule 2: Broad Detection - Any schtasks.exe /Create (Level 8)
-    ================================================================================
-    This rule is a general tripwire for any scheduled task creation via schtasks.exe.
-    The level is set lower (8) because legitimate administrators and scripts may
-    trigger this. It is valuable for logging, threat hunting, and for use in the
-    correlation rule below.
-  -->
-  <rule id="100102" level="8">
-    <if_sid>92004</if_sid> <!-- Wazuh Sysmon: Process Creation -->
-    <field name="win.eventdata.image" type="pcre2">(?i)schtasks\.exe$</field>
-    <field name="win.eventdata.commandLine" type="pcre2">(?i)\/create</field>
-    <description>Scheduled task created via schtasks.exe. Review for legitimacy.</description>
-    <mitre>
-      <id>T1053.005</id>
-    </mitre>
-  </rule>
+	<!-- Scheduled Task created through WMI -->
+	<rule id="100105" level="13">
+		<if_sid>92027</if_id>
+		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)(Invoke\-CimMethod. *PS_ScheduledTask. *RegisterByXml)</regex>
+		<description>Suspicious Powershell Activity: scheduled task created using WMI with command $(win.eventdata.CommandLine)</description>
+		<mitre>
+			<id>T1053.005</id>
+		</mitre>
+		<group>persistence,scheduled_task,powershell</group>
+	</rule>
 
-  <!--
-    ================================================================================
-    Rule 3: PowerShell-Specific Detection - New-ScheduledTaskAction (Level 10)
-    ================================================================================
-    Detects the use of the native PowerShell cmdlet 'New-ScheduledTaskAction' to
-    create tasks. This is a common "fileless" method used by attackers.
-    Requires PowerShell ScriptBlock logging to be enabled (Event ID 4104).
-  -->
-  <rule id="100103" level="10">
-    <if_sid>61603</if_sid> <!-- Wazuh: PowerShell ScriptBlock logging -->
-    <field name="win.eventdata.scriptBlockText" type="pcre2">(?i)New-ScheduledTaskAction</field>
-    <description>PowerShell created a scheduled task using New-ScheduledTaskAction cmdlet.</description>
-    <mitre>
-      <id>T1053.005</id>
-    </mitre>
-  </rule>
+	<!-- Registry modification -->
+	<rule id="100106" level="10">
+		<if_sid>92041</if_sid>
+		<regex field="win.eventdata.Image">(?i)\\reg\.exe</regex>
+		<regex field="win.eventdata.CommandLine">(?i)reg\s+add\s+.*HKCU\\Software\\Classes\\mscfile\\shell\\open\\command</regex>
+		<decription>Registry hijack detected: .msc file association modified (possible UAC bypass / persistence)</description>
+		<mitre>
+			<id>T1112</id>
+		</mitre>
+		<group>persistence,scheduled_task,registry</group>
+	</rule>
 
-  <!--
-    ================================================================================
-    Rule 4: PowerShell-Specific Detection - Register-ScheduledTask (Level 10)
-    ================================================================================
-    Detects the use of the 'Register-ScheduledTask' cmdlet, another common method
-    for creating tasks within PowerShell scripts.
-    Requires PowerShell ScriptBlock logging to be enabled (Event ID 4104).
-  -->
-  <rule id="100104" level="10">
-    <if_sid>61603</if_sid> <!-- Wazuh: PowerShell ScriptBlock logging -->
-    <field name="win.eventdata.scriptBlockText" type="pcre2">(?i)Register-ScheduledTask</field>
-    <description>PowerShell created a scheduled task using Register-ScheduledTask cmdlet.</description>
-    <mitre>
-      <id>T1053.005</id>
-    </mitre>
-  </rule>
-
-  <!--
-    ================================================================================
-    Rule 5: Correlation Rule - Multiple Indicators (Level 13)
-    ================================================================================
-    This rule triggers if any of the atomic detection rules (100101-100104) fire.
-    Its main purpose is to generate a single, high-level alert that groups
-    related suspicious activities together, making it easier for an analyst to
-    investigate.
-  -->
-  <rule id="100199" level="13">
-    <if_sid>100101, 100102, 100103, 100104</if_sid>
-    <!-- You can add a timeframe here if you want to correlate multiple events
-         within a certain window, e.g., <timeframe>180</timeframe> -->
-    <description>MITRE T1053.005: Suspicious Scheduled Task activity detected.</description>
-    <mitre>
-      <id>T1053.005</id>
-    </mitre>
-  </rule>
+	<!-- Correlation rule -->
+	<rule id="110000" level="15">
+		<if_sid>100104,100106</if_sid>
+		<description>High-confidence persistence: Registry hijack (.msc) chained with scheduled task execution.</description>
+		<mitre>
+			<id>T1053.005</id>
+		</mitre>
+		<group>persistence,scheduled_task</group>
+	</rule>
 
 </group>

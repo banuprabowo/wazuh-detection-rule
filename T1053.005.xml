@@ -1,54 +1,53 @@
 <group name="windows, sysmon, attack, persistence, t1053.005">
-	<!-- Schtasks.exe detection on command-line -->
-	<rule id="100103" level="10">
-		<if_sid>60228</if_sid>
-		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)\/sc\s+once</regex>
-		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)\/tr\s+(cmd\.exe|powershell\.exe)</regex>
-		<description>Scheduled Task Creation: one-time execution and launching an interpreter ($(win.eventdata.CommandLine)): </description>
-		<mitre>
-			<id>T1053.005</id>
-		</mitre>
-		<group>persistence,scheduled_task,lateral_movement,</group>
-	</rule>
+    <!-- Schtasks.exe detection on command-line -->
+    <rule id="100103" level="10">
+        <if_sid>60228</if_sid>
+        <regex field="win.eventdata.CommandLine" type="pcre2">(?i)(?=.*\/sc\s+once)(?=.*\/tr\s+(cmd\.exe|powershell\.exe))</regex>
+        <description>Scheduled Task Creation: one-time execution and launching an interpreter ($(win.eventdata.CommandLine))</description>
+        <mitre>
+            <id>T1053.005</id>
+        </mitre>
+        <group>persistence,scheduled_task,lateral_movement,</group>
+    </rule>
 
-	<rule id="100104" level="10">
-		<if_sid>60228</if_sid>
-		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)(compmgnt\.msc|eventvmw\.msc|\.msc</regex>
-		<description>Scheduled Task Creation</description>
-		<group>persistence,scheduled_task</group>
-	</rule>
+    <rule id="100104" level="10">
+        <if_sid>60228</if_sid>
+        <field name="win.eventdata.CommandLine" type="pcre2">(?i)(compmgnt\.msc|eventvmw\.msc|\.msc)</field>
+        <description>Scheduled Task Creation</description>
+        <group>persistence,scheduled_task</group>
+    </rule>
 
-	<!-- Scheduled Task created through WMI -->
-	<rule id="100105" level="13">
-		<if_sid>92027</if_id>
-		<regex field="win.eventdata.CommandLine" type="pcre2">(?i)(Invoke\-CimMethod. *PS_ScheduledTask. *RegisterByXml)</regex>
-		<description>Suspicious Powershell Activity: scheduled task created using WMI with command $(win.eventdata.CommandLine)</description>
-		<mitre>
-			<id>T1053.005</id>
-		</mitre>
-		<group>persistence,scheduled_task,powershell</group>
-	</rule>
+    <!-- Scheduled Task created through WMI -->
+    <rule id="100105" level="13">
+        <if_sid>92027</if_sid>
+        <regex field="win.eventdata.CommandLine" type="pcre2">(?i)(Invoke\-CimMethod. *PS_ScheduledTask. *RegisterByXml)</regex>
+        <description>Suspicious Powershell Activity: scheduled task created using WMI with command $(win.eventdata.CommandLine)</description>
+        <mitre>
+            <id>T1053.005</id>
+        </mitre>
+        <group>persistence,scheduled_task,powershell</group>
+    </rule>
 
-	<!-- Registry modification -->
-	<rule id="100106" level="10">
-		<if_sid>92041</if_sid>
-		<regex field="win.eventdata.Image">(?i)\\reg\.exe</regex>
-		<regex field="win.eventdata.CommandLine">(?i)reg\s+add\s+.*HKCU\\Software\\Classes\\mscfile\\shell\\open\\command</regex>
-		<decription>Registry hijack detected: .msc file association modified (possible UAC bypass / persistence)</description>
-		<mitre>
-			<id>T1112</id>
-		</mitre>
-		<group>persistence,scheduled_task,registry</group>
-	</rule>
+    <!-- Registry modification -->
+    <rule id="100106" level="10">
+        <if_sid>92041</if_sid>
+        <regex field="win.eventdata.Image">(?i)\\reg\.exe</regex>
+        <regex field="win.eventdata.CommandLine">(?i)reg\s+add\s+.*HKCU\\Software\\Classes\\mscfile\\shell\\open\\command</regex>
+        <description>Registry hijack detected: .msc file association modified (possible UAC bypass / persistence)</description>
+        <mitre>
+            <id>T1112</id>
+        </mitre>
+        <group>persistence,scheduled_task,registry</group>
+    </rule>
 
-	<!-- Correlation rule -->
-	<rule id="110000" level="15">
-		<if_sid>100104,100106</if_sid>
-		<description>High-confidence persistence: Registry hijack (.msc) chained with scheduled task execution.</description>
-		<mitre>
-			<id>T1053.005</id>
-		</mitre>
-		<group>persistence,scheduled_task</group>
-	</rule>
+    <!-- Correlation rule -->
+    <rule id="110000" level="15">
+        <if_sid>100104,100106</if_sid>
+        <description>High-confidence persistence: Registry hijack (.msc) chained with scheduled task execution.</description>
+        <mitre>
+            <id>T1053.005</id>
+        </mitre>
+        <group>persistence,scheduled_task</group>
+    </rule>
 
 </group>
